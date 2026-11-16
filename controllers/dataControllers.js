@@ -3,6 +3,7 @@ const fs = require('fs');
 const Data = require('../models/data');
 const msgs = require('../utilities/responseMessages');
 const { normalizePath, persistUploadedFile, removeUploadedFile } = require('../utilities/fileHelpers');
+const { getDriveFileStream } = require('../utilities/driveClient');
 
 const getData = async (req, res) => {
     try {
@@ -107,6 +108,14 @@ const downloadCv = async (req, res) => {
         }
 
         const safeOwner = (data.name || 'Portfolio').replace(/[^a-zA-Z0-9_-]+/g, '_');
+
+        if (data.cv.startsWith('media/drive/')) {
+            const fileId = data.cv.replace('media/drive/', '').trim();
+            const { stream } = await getDriveFileStream(fileId);
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="${safeOwner}_CV.pdf"`);
+            return stream.pipe(res);
+        }
 
         if (/^https?:\/\//i.test(data.cv)) {
             const response = await fetch(data.cv);

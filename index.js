@@ -15,6 +15,7 @@ const dataRoutes = require('./routes/dataRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const projectRoutes = require('./routes/projectRoutes');
 const socialRoutes = require('./routes/socialRoutes');
+const mediaRoutes = require('./routes/mediaRoutes');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -93,6 +94,7 @@ app.use('/data', dataRoutes);
 app.use('/contacts', contactRoutes);
 app.use('/projects', projectRoutes);
 app.use('/socials', socialRoutes);
+app.use('/media', mediaRoutes);
 
 app.use((err, req, res, next) => {
     if (err) {

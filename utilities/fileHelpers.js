@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { v2: cloudinary } = require('cloudinary');
+const { isDriveEnabled, uploadBufferToDrive, deleteFromDrive } = require('./driveClient');
 
 const isCloudinaryEnabled = () => Boolean(
     process.env.CLOUDINARY_CLOUD_NAME &&
@@ -26,10 +27,13 @@ const normalizePath = (filePath) => {
 };
 
 /**
- * Persists a multer file either to Cloudinary (when configured) or returns its local relative path.
+ * Persists a multer file to Google Drive (when configured), Cloudinary, or local disk.
  */
 const persistUploadedFile = async (file, folder = 'portfolio') => {
     if (!file) return '';
+    if (isDriveEnabled() && file.buffer) {
+        return uploadBufferToDrive(file);
+    }
     if (isCloudinaryEnabled() && file.buffer) {
         const isPdf = file.mimetype === 'application/pdf' || /\.pdf$/i.test(file.originalname || '');
         const resourceType = isPdf ? 'raw' : 'auto';
@@ -46,10 +50,15 @@ const persistUploadedFile = async (file, folder = 'portfolio') => {
 };
 
 /**
- * Safely delete a local uploaded file if it exists inside ./uploads.
+ * Safely delete a previously uploaded file from Google Drive or local ./uploads.
  */
 const removeUploadedFile = (relativePath) => {
     if (!relativePath) return;
+    if (relativePath.startsWith('media/drive/')) {
+        const fileId = relativePath.replace('media/drive/', '').trim();
+        deleteFromDrive(fileId).catch(() => {});
+        return;
+    }
     if (/^https?:\/\//i.test(relativePath)) return;
     const normalized = normalizePath(relativePath);
     if (!normalized.startsWith('uploads/')) return;

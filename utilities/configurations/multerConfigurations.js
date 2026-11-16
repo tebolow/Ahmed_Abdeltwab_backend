@@ -9,13 +9,15 @@ const ALLOWED_EXTENSIONS = new Set([
     '.pdf'
 ]);
 
-const useCloudinary = Boolean(
+const { isDriveEnabled } = require('../driveClient');
+
+const useCloudStorage = isDriveEnabled() || Boolean(
     process.env.CLOUDINARY_CLOUD_NAME &&
     process.env.CLOUDINARY_API_KEY &&
     process.env.CLOUDINARY_API_SECRET
 );
 
-const storage = useCloudinary
+const storage = useCloudStorage
     ? multer.memoryStorage()
     : multer.diskStorage({
           destination: (req, file, cb) => {
