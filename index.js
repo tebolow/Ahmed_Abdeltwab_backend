@@ -20,7 +20,7 @@ const app = express();
 app.set('trust proxy', 1);
 
 const uploadsDir = path.resolve(process.cwd(), 'uploads');
-if (!fs.existsSync(uploadsDir)) {
+if (!process.env.VERCEL && !fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
@@ -45,6 +45,20 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
+let seededOnce = false;
+app.use(async (req, res, next) => {
+    try {
+        await DBConnect();
+        if (!seededOnce) {
+            await seedInitialAdmin();
+            seededOnce = true;
+        }
+        next();
+    } catch (err) {
+        next(err);
+    }
+});
+
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 15,
@@ -61,7 +75,9 @@ const contactLimiter = rateLimit({
     message: { msg: 'fail', error: 'Too many contact messages sent. Please try again later.' }
 });
 
-app.use('/uploads', express.static(uploadsDir));
+if (!process.env.VERCEL) {
+    app.use('/uploads', express.static(uploadsDir));
+}
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
@@ -90,10 +106,15 @@ app.use((err, req, res, next) => {
 
 const port = process.env.PORT || 2300;
 
-(async function startServer() {
-    await DBConnect();
-    await seedInitialAdmin();
-    app.listen(port, () => {
-        console.log(`Server started on port ${port} (${process.env.NODE_ENV || 'development'})`);
-    });
-})();
+if (!process.env.VERCEL) {
+    (async function startServer() {
+        await DBConnect();
+        await seedInitialAdmin();
+        seededOnce = true;
+        app.listen(port, () => {
+            console.log(`Server started on port ${port} (${process.env.NODE_ENV || 'development'})`);
+        });
+    })();
+}
+
+module.exports = app;

@@ -2,7 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const Data = require('../models/data');
 const msgs = require('../utilities/responseMessages');
-const { normalizePath, removeUploadedFile } = require('../utilities/fileHelpers');
+const { normalizePath, persistUploadedFile, removeUploadedFile } = require('../utilities/fileHelpers');
 
 const getData = async (req, res) => {
     try {
@@ -26,16 +26,16 @@ const editData = async (req, res) => {
         const files = req.files || {};
 
         const logoPath = files.logo?.[0]
-            ? normalizePath(files.logo[0].path)
+            ? await persistUploadedFile(files.logo[0], 'portfolio/site')
             : (existing?.logo || '');
         const homeImagePath = files.homeImage?.[0]
-            ? normalizePath(files.homeImage[0].path)
+            ? await persistUploadedFile(files.homeImage[0], 'portfolio/site')
             : (existing?.homeImage || '');
         const aboutImagePath = files.aboutImage?.[0]
-            ? normalizePath(files.aboutImage[0].path)
+            ? await persistUploadedFile(files.aboutImage[0], 'portfolio/site')
             : (existing?.aboutImage || '');
         const cvPath = files.cv?.[0]
-            ? normalizePath(files.cv[0].path)
+            ? await persistUploadedFile(files.cv[0], 'portfolio/cv')
             : (existing?.cv || '');
 
         if (files.logo?.[0] && existing?.logo) removeUploadedFile(existing.logo);
@@ -106,6 +106,19 @@ const downloadCv = async (req, res) => {
             });
         }
 
+        const safeOwner = (data.name || 'Portfolio').replace(/[^a-zA-Z0-9_-]+/g, '_');
+
+        if (/^https?:\/\//i.test(data.cv)) {
+            const response = await fetch(data.cv);
+            if (!response.ok) {
+                return res.status(404).json({ msg: msgs.FAIL, error: 'CV file not found' });
+            }
+            const buffer = Buffer.from(await response.arrayBuffer());
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="${safeOwner}_CV.pdf"`);
+            return res.send(buffer);
+        }
+
         const fullPath = path.resolve(process.cwd(), normalizePath(data.cv));
         if (!fs.existsSync(fullPath)) {
             return res.status(404).json({
@@ -115,7 +128,6 @@ const downloadCv = async (req, res) => {
         }
 
         const ext = path.extname(fullPath) || '.pdf';
-        const safeOwner = (data.name || 'Portfolio').replace(/[^a-zA-Z0-9_-]+/g, '_');
         res.download(fullPath, `${safeOwner}_CV${ext}`);
     } catch (error) {
         console.log(error);

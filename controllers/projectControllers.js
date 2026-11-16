@@ -1,6 +1,6 @@
 const Project = require('../models/project');
 const msgs = require('../utilities/responseMessages');
-const { normalizePath, removeUploadedFile } = require('../utilities/fileHelpers');
+const { persistUploadedFile, removeUploadedFile } = require('../utilities/fileHelpers');
 
 const parseSkills = (rawSkills) => {
     if (!rawSkills) return [];
@@ -26,9 +26,13 @@ const addProject = async (req, res) => {
             });
         }
 
-        const thumbPath = normalizePath(files.thumb[0].path);
-        const imgsPaths = (files.imgs || []).map((img) => normalizePath(img.path));
-        const videoPath = files.video?.[0] ? normalizePath(files.video[0].path) : '';
+        const thumbPath = await persistUploadedFile(files.thumb[0], 'portfolio/projects');
+        const imgsPaths = await Promise.all(
+            (files.imgs || []).map((img) => persistUploadedFile(img, 'portfolio/projects'))
+        );
+        const videoPath = files.video?.[0]
+            ? await persistUploadedFile(files.video[0], 'portfolio/projects')
+            : '';
         const skills = parseSkills(req.body.skills);
 
         const project = await Project.create({
@@ -107,13 +111,15 @@ const updateProject = async (req, res) => {
         let thumbPath = existing.thumb;
         if (files.thumb?.[0]) {
             removeUploadedFile(existing.thumb);
-            thumbPath = normalizePath(files.thumb[0].path);
+            thumbPath = await persistUploadedFile(files.thumb[0], 'portfolio/projects');
         }
 
         let imgsPaths = existing.imgs;
         if (files.imgs?.length) {
             (existing.imgs || []).forEach(removeUploadedFile);
-            imgsPaths = files.imgs.map((img) => normalizePath(img.path));
+            imgsPaths = await Promise.all(
+                files.imgs.map((img) => persistUploadedFile(img, 'portfolio/projects'))
+            );
         }
 
         let videoPath = existing.video;
@@ -122,7 +128,7 @@ const updateProject = async (req, res) => {
             videoPath = '';
         } else if (files.video?.[0]) {
             removeUploadedFile(existing.video);
-            videoPath = normalizePath(files.video[0].path);
+            videoPath = await persistUploadedFile(files.video[0], 'portfolio/projects');
         }
 
         const skills = req.body.skills !== undefined ? parseSkills(req.body.skills) : existing.skills;

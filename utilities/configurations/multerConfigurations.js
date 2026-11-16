@@ -9,16 +9,24 @@ const ALLOWED_EXTENSIONS = new Set([
     '.pdf'
 ]);
 
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, './uploads');
-    },
-    filename: (req, file, cb) => {
-        const safeOriginal = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const name = `${Date.now()}-${Math.round(Math.random() * 100000)}-${safeOriginal}`;
-        cb(null, name);
-    }
-});
+const useCloudinary = Boolean(
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET
+);
+
+const storage = useCloudinary
+    ? multer.memoryStorage()
+    : multer.diskStorage({
+          destination: (req, file, cb) => {
+              cb(null, './uploads');
+          },
+          filename: (req, file, cb) => {
+              const safeOriginal = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+              const name = `${Date.now()}-${Math.round(Math.random() * 100000)}-${safeOriginal}`;
+              cb(null, name);
+          }
+      });
 
 const fileFilter = (req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase();
@@ -36,7 +44,7 @@ const upload = multer({
     storage,
     fileFilter,
     limits: {
-        fileSize: 100 * 1024 * 1024 // 100 MB max per file (supports demo videos)
+        fileSize: 100 * 1024 * 1024 // 100 MB max per file (local); Vercel serverless has 4.5 MB request limit
     }
 });
 
