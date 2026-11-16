@@ -1,4 +1,4 @@
-const mongoose = require(`mongoose`);
+const mongoose = require('mongoose');
 
 const projectSchema = new mongoose.Schema({
     name: {
@@ -19,11 +19,11 @@ const projectSchema = new mongoose.Schema({
     },
     imgs: {
         type: [String],
-        required: true
+        default: []
     },
     video: {
         type: String,
-        required: true
+        default: ''
     },
     category: {
         type: String,
@@ -31,10 +31,9 @@ const projectSchema = new mongoose.Schema({
     },
     skills: {
         type: [String],
-        required: true
+        default: []
     }
-})
+}, { timestamps: true });
 
-const Project = mongoose.model(`Project`, projectSchema);
-
+const Project = mongoose.model('Project', projectSchema);
 module.exports = Project;

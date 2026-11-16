@@ -1,4 +1,4 @@
-const mongoose = require(`mongoose`);
+const mongoose = require('mongoose');
 
 const dataSchema = new mongoose.Schema({
     name: {
@@ -19,7 +19,7 @@ const dataSchema = new mongoose.Schema({
     },
     logo: {
         type: String,
-        required: true
+        default: ''
     },
     location: {
         type: String,
@@ -35,13 +35,25 @@ const dataSchema = new mongoose.Schema({
     },
     homeImage: {
         type: String,
-        required: true
+        default: ''
     },
     aboutImage: {
         type: String,
-        required: true
+        default: ''
     },
+    cv: {
+        type: String,
+        default: ''
+    },
+    toolkit: {
+        type: [String],
+        default: ['Angular', 'TypeScript', 'HTML5', 'CSS3', 'Node.js', 'Express.js', 'MongoDB', 'REST APIs', 'Git']
+    },
+    portfolioFilters: {
+        type: [String],
+        default: ['All', 'Web', 'Mobile', 'Desktop', 'AI']
+    }
 });
 
-const Data = mongoose.model(`Data`, dataSchema);
-module.exports = Data
+const Data = mongoose.model('Data', dataSchema);
+module.exports = Data;
