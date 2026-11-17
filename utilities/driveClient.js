@@ -1,104 +1,124 @@
 const { Readable } = require('stream');
-const { google } = require('googleapis');
 
-const isDriveOAuthEnabled = () => Boolean(
+const isDriveEnabled = () => Boolean(
     process.env.GOOGLE_DRIVE_CLIENT_ID &&
     process.env.GOOGLE_DRIVE_CLIENT_SECRET &&
     process.env.GOOGLE_DRIVE_REFRESH_TOKEN
 );
 
-const isDriveServiceAccountEnabled = () => Boolean(
-    process.env.GOOGLE_DRIVE_CLIENT_EMAIL &&
-    process.env.GOOGLE_DRIVE_PRIVATE_KEY
-);
+let cachedToken = null;
+let tokenExpiresAt = 0;
 
-const isDriveEnabled = () => isDriveOAuthEnabled() || isDriveServiceAccountEnabled();
-
-let cachedDrive = null;
-
-const getDriveClient = () => {
-    if (cachedDrive) return cachedDrive;
-
-    if (isDriveOAuthEnabled()) {
-        const oauth2 = new google.auth.OAuth2(
-            process.env.GOOGLE_DRIVE_CLIENT_ID,
-            process.env.GOOGLE_DRIVE_CLIENT_SECRET
-        );
-        oauth2.setCredentials({
-            refresh_token: process.env.GOOGLE_DRIVE_REFRESH_TOKEN
-        });
-        cachedDrive = google.drive({ version: 'v3', auth: oauth2 });
-        return cachedDrive;
+const getAccessToken = async () => {
+    if (cachedToken && Date.now() < tokenExpiresAt) {
+        return cachedToken;
     }
 
-    if (isDriveServiceAccountEnabled()) {
-        const auth = new google.auth.JWT({
-            email: process.env.GOOGLE_DRIVE_CLIENT_EMAIL,
-            key: process.env.GOOGLE_DRIVE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-            scopes: ['https://www.googleapis.com/auth/drive']
-        });
-        cachedDrive = google.drive({ version: 'v3', auth });
-        return cachedDrive;
+    const params = new URLSearchParams({
+        client_id: process.env.GOOGLE_DRIVE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_DRIVE_CLIENT_SECRET,
+        refresh_token: process.env.GOOGLE_DRIVE_REFRESH_TOKEN,
+        grant_type: 'refresh_token'
+    });
+
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString()
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.access_token) {
+        throw new Error(data.error_description || data.error || 'Failed to refresh Google Drive token');
     }
 
-    return null;
+    cachedToken = data.access_token;
+    tokenExpiresAt = Date.now() + Math.max((data.expires_in || 3600) - 60, 60) * 1000;
+    return cachedToken;
 };
 
 const uploadBufferToDrive = async (file) => {
-    const drive = getDriveClient();
-    if (!drive) {
-        throw new Error('Google Drive is not configured');
-    }
-
+    const token = await getAccessToken();
     const folderId = (process.env.GOOGLE_DRIVE_FOLDER_ID || '').trim();
-    const requestBody = {
+    const metadata = {
         name: `${Date.now()}-${(file.originalname || 'file').replace(/[^a-zA-Z0-9._-]/g, '_')}`,
         ...(folderId ? { parents: [folderId] } : {})
     };
 
-    const created = await drive.files.create({
-        requestBody,
-        media: {
-            mimeType: file.mimetype || 'application/octet-stream',
-            body: Readable.from(file.buffer)
-        },
-        fields: 'id'
-    });
+    const boundary = `----portfolioDriveBoundary${Date.now()}`;
+    const mimeType = file.mimetype || 'application/octet-stream';
 
-    const fileId = created.data.id;
-    await drive.permissions.create({
-        fileId,
-        requestBody: { role: 'reader', type: 'anyone' }
+    const headerPart = Buffer.from(
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+        `--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`,
+        'utf8'
+    );
+    const footerPart = Buffer.from(`\r\n--${boundary}--`, 'utf8');
+    const bodyBuffer = Buffer.concat([headerPart, file.buffer, footerPart]);
+
+    const uploadRes = await fetch(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+        {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': `multipart/related; boundary=${boundary}`,
+                'Content-Length': String(bodyBuffer.length)
+            },
+            body: bodyBuffer
+        }
+    );
+
+    const created = await uploadRes.json();
+    if (!uploadRes.ok || !created.id) {
+        throw new Error(created?.error?.message || 'Google Drive upload failed');
+    }
+
+    await fetch(`https://www.googleapis.com/drive/v3/files/${created.id}/permissions`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ role: 'reader', type: 'anyone' })
     }).catch(() => {});
 
-    return `media/drive/${fileId}`;
+    return `media/drive/${created.id}`;
 };
 
 const deleteFromDrive = async (fileId) => {
-    const drive = getDriveClient();
-    if (!drive || !fileId) return;
-    await drive.files.delete({ fileId }).catch(() => {});
+    if (!fileId || !isDriveEnabled()) return;
+    const token = await getAccessToken();
+    await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+    }).catch(() => {});
 };
 
 const getDriveFileStream = async (fileId) => {
-    const drive = getDriveClient();
-    if (!drive) {
-        throw new Error('Google Drive is not configured');
+    const token = await getAccessToken();
+    const encodedId = encodeURIComponent(fileId);
+
+    const metaRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${encodedId}?fields=name,mimeType,size`,
+        { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!metaRes.ok) {
+        throw new Error('Failed to fetch Drive file metadata');
+    }
+    const meta = await metaRes.json();
+
+    const mediaRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${encodedId}?alt=media`,
+        { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!mediaRes.ok || !mediaRes.body) {
+        throw new Error('Failed to stream Drive file');
     }
 
-    const meta = await drive.files.get({
-        fileId,
-        fields: 'name, mimeType, size'
-    });
-
-    const mediaRes = await drive.files.get(
-        { fileId, alt: 'media' },
-        { responseType: 'stream' }
-    );
-
     return {
-        meta: meta.data,
-        stream: mediaRes.data
+        meta,
+        stream: Readable.fromWeb(mediaRes.body)
     };
 };
 
@@ -108,4 +128,3 @@ module.exports = {
     deleteFromDrive,
     getDriveFileStream
 };
-
