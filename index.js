@@ -31,12 +31,13 @@ app.use(helmet({
 
 const allowedOrigins = [process.env.ADMIN, process.env.USER]
     .concat((process.env.CORS_ORIGINS || '').split(','))
-    .map((origin) => (origin || '').trim())
+    .map((origin) => (origin || '').trim().replace(/\/+$/, ''))
     .filter(Boolean);
 
 app.use(cors({
     origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) {
+        const cleanOrigin = (origin || '').replace(/\/+$/, '');
+        if (!cleanOrigin || allowedOrigins.includes(cleanOrigin)) {
             return callback(null, true);
         }
         return callback(new Error(`Origin ${origin} not allowed by CORS`));
