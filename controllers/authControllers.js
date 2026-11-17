@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const jwt = require('jsonwebtoken');
+const { signJwt } = require('../utilities/jwt');
 const Admin = require('../models/authorization');
 const msgs = require('../utilities/responseMessages');
 
@@ -65,7 +65,7 @@ const login = async (req, res) => {
             });
         }
 
-        const token = jwt.sign(
+        const token = signJwt(
             { id: admin._id, key: admin.key },
             secret,
             { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }

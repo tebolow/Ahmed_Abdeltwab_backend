@@ -1,4 +1,4 @@
-const jwt = require('jsonwebtoken');
+const { verifyJwt } = require('../utilities/jwt');
 const msgs = require('../utilities/responseMessages');
 
 const authMiddleware = (req, res, next) => {
@@ -20,7 +20,7 @@ const authMiddleware = (req, res, next) => {
             });
         }
 
-        const decoded = jwt.verify(token, secret);
+        const decoded = verifyJwt(token, secret);
         req.admin = decoded;
         next();
     } catch (error) {
