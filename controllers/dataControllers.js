@@ -28,21 +28,21 @@ const editData = async (req, res) => {
 
         const logoPath = files.logo?.[0]
             ? await persistUploadedFile(files.logo[0], 'portfolio/site')
-            : (existing?.logo || '');
+            : (req.body.logo || existing?.logo || '');
         const homeImagePath = files.homeImage?.[0]
             ? await persistUploadedFile(files.homeImage[0], 'portfolio/site')
-            : (existing?.homeImage || '');
+            : (req.body.homeImage || existing?.homeImage || '');
         const aboutImagePath = files.aboutImage?.[0]
             ? await persistUploadedFile(files.aboutImage[0], 'portfolio/site')
-            : (existing?.aboutImage || '');
+            : (req.body.aboutImage || existing?.aboutImage || '');
         const cvPath = files.cv?.[0]
             ? await persistUploadedFile(files.cv[0], 'portfolio/cv')
-            : (existing?.cv || '');
+            : (req.body.cv || existing?.cv || '');
 
-        if (files.logo?.[0] && existing?.logo) removeUploadedFile(existing.logo);
-        if (files.homeImage?.[0] && existing?.homeImage) removeUploadedFile(existing.homeImage);
-        if (files.aboutImage?.[0] && existing?.aboutImage) removeUploadedFile(existing.aboutImage);
-        if (files.cv?.[0] && existing?.cv) removeUploadedFile(existing.cv);
+        if ((files.logo?.[0] || (req.body.logo && req.body.logo !== existing?.logo)) && existing?.logo) removeUploadedFile(existing.logo);
+        if ((files.homeImage?.[0] || (req.body.homeImage && req.body.homeImage !== existing?.homeImage)) && existing?.homeImage) removeUploadedFile(existing.homeImage);
+        if ((files.aboutImage?.[0] || (req.body.aboutImage && req.body.aboutImage !== existing?.aboutImage)) && existing?.aboutImage) removeUploadedFile(existing.aboutImage);
+        if ((files.cv?.[0] || (req.body.cv && req.body.cv !== existing?.cv)) && existing?.cv) removeUploadedFile(existing.cv);
 
         const parseStringArray = (rawVal) => {
             if (Array.isArray(rawVal)) return rawVal.map((s) => String(s).trim()).filter(Boolean);

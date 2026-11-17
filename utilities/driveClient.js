@@ -122,8 +122,23 @@ const getDriveFileStream = async (fileId) => {
     };
 };
 
+const makeFilePublic = async (fileId) => {
+    if (!fileId || !isDriveEnabled()) return;
+    const token = await getAccessToken();
+    await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/permissions`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ role: 'reader', type: 'anyone' })
+    }).catch(() => {});
+};
+
 module.exports = {
     isDriveEnabled,
+    getAccessToken,
+    makeFilePublic,
     uploadBufferToDrive,
     deleteFromDrive,
     getDriveFileStream

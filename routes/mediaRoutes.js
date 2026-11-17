@@ -1,6 +1,33 @@
 const express = require('express');
 const router = express.Router();
-const { getDriveFileStream } = require('../utilities/driveClient');
+const authMiddleware = require('../middlewares/authMiddleware');
+const { isDriveEnabled, getAccessToken, makeFilePublic, getDriveFileStream } = require('../utilities/driveClient');
+
+router.get('/drive-token', authMiddleware, async (req, res) => {
+    try {
+        if (!isDriveEnabled()) {
+            return res.status(200).json({ enabled: false });
+        }
+        const accessToken = await getAccessToken();
+        res.status(200).json({
+            enabled: true,
+            accessToken,
+            folderId: (process.env.GOOGLE_DRIVE_FOLDER_ID || '').trim()
+        });
+    } catch (error) {
+        console.error('Drive token error:', error.message);
+        res.status(500).json({ msg: 'fail', error: 'Failed to obtain Drive upload token' });
+    }
+});
+
+router.post('/drive-public/:fileId', authMiddleware, async (req, res) => {
+    try {
+        await makeFilePublic(req.params.fileId);
+        res.status(200).json({ msg: 'success' });
+    } catch (error) {
+        res.status(500).json({ msg: 'fail', error: 'Failed to set file permissions' });
+    }
+});
 
 router.get('/drive/:fileId', async (req, res) => {
     try {
@@ -22,4 +49,3 @@ router.get('/drive/:fileId', async (req, res) => {
 });
 
 module.exports = router;
-
